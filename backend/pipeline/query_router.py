@@ -13,7 +13,8 @@ DB_PATH = ROOT / "backend" / "data.db"
 
 
 def _get_conn():
-    conn = sqlite3.connect(str(DB_PATH))
+    uri = f"file:{DB_PATH}?mode=ro"
+    conn = sqlite3.connect(uri, uri=True)
     conn.row_factory = sqlite3.Row
     return conn
 

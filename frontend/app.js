@@ -2,7 +2,7 @@
    Graph Query System — Frontend Application
    ═══════════════════════════════════════════════════════════════ */
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = "";
 
 // ─── Node Color Map ──────────────────────────────────────────
 const NODE_COLORS = {

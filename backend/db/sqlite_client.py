@@ -7,8 +7,10 @@ DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data.db")
 
 
 def get_connection() -> sqlite3.Connection:
-    """Return a connection to the SQLite database."""
-    conn = sqlite3.connect(DB_PATH)
+    """Return a connection to the SQLite database (read-only on Vercel)."""
+    # Use URI mode for read-only access on serverless (read-only filesystem)
+    uri = f"file:{DB_PATH}?mode=ro"
+    conn = sqlite3.connect(uri, uri=True)
     conn.row_factory = sqlite3.Row
     return conn
 

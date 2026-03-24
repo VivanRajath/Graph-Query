@@ -2,7 +2,6 @@
 
 import os
 import asyncio
-import webbrowser
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import sys
@@ -39,13 +38,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve frontend static files
+# Serve frontend static files (local dev only; Vercel serves frontend separately)
+IS_VERCEL = os.getenv("VERCEL", "") == "1"
 FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
-if os.path.isdir(FRONTEND_DIR):
+if not IS_VERCEL and os.path.isdir(FRONTEND_DIR):
     app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
-# Auto-open browser flag
-AUTO_OPEN = os.getenv("AUTO_OPEN_BROWSER", "true").lower() in ("true", "1", "yes")
+# Auto-open browser flag (disabled on Vercel)
+AUTO_OPEN = (not IS_VERCEL) and os.getenv("AUTO_OPEN_BROWSER", "true").lower() in ("true", "1", "yes")
 
 
 class QueryRequest(BaseModel):
@@ -68,14 +68,18 @@ class QueryResponse(BaseModel):
 async def startup():
     """Open the frontend in the default browser on startup."""
     if AUTO_OPEN:
-        # Short delay to let uvicorn finish binding
-        async def _open():
-            await asyncio.sleep(1.0)
-            url = "http://localhost:8000/static/index.html"
-            print(f"[Startup] Opening browser → {url}")
-            webbrowser.open(url)
+        try:
+            import webbrowser
+            # Short delay to let uvicorn finish binding
+            async def _open():
+                await asyncio.sleep(1.0)
+                url = "http://localhost:8000/static/index.html"
+                print(f"[Startup] Opening browser → {url}")
+                webbrowser.open(url)
 
-        asyncio.create_task(_open())
+            asyncio.create_task(_open())
+        except Exception:
+            pass
 
 
 # ─── Endpoints ───────────────────────────────────────────────────────────────

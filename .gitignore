@@ -19,11 +19,9 @@ env/
 venv/
 ENV/
 
-# Databases
-*.db
-*.sqlite
-*.sqlite3
-backend/data.db
+# Databases (keep data.db for deployment)
+# *.db  — removed so data.db ships with Vercel deploy
+# backend/data.db  — removed
 
 # Logs
 *.log
