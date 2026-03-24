@@ -21,8 +21,8 @@ h11==0.16.0
 httplib2==0.31.2
 idna==3.11
 neo4j==5.24.0
-numpy==2.4.3
-pandas==2.2.2
+
+
 proto-plus==1.27.1
 protobuf==5.29.6
 pyasn1==0.6.3
