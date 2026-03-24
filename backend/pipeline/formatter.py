@@ -2,6 +2,8 @@
 
 import os
 import json
+import signal
+import threading
 import google.generativeai as genai
 from dotenv import load_dotenv
 
@@ -44,7 +46,7 @@ def format_results(question: str, rows: list[dict], row_count: int, template_use
         model = genai.GenerativeModel("gemini-2.0-flash")
 
         # Truncate rows for the prompt to avoid token limits
-        display_rows = rows[:50]
+        display_rows = rows[:20]  # Reduced from 50 to 20 for faster responses
         rows_text = json.dumps(display_rows, indent=2, default=str)
 
         prompt = (
@@ -54,10 +56,10 @@ def format_results(question: str, rows: list[dict], row_count: int, template_use
             f"Please format this data as a helpful response to the user's question."
         )
 
+        # Use a timeout to prevent hanging on serverless
         response = model.generate_content(
-            [
-                {"role": "user", "parts": [{"text": SYSTEM_PROMPT + "\n\n" + prompt}]}
-            ]
+            [{"role": "user", "parts": [{"text": SYSTEM_PROMPT + "\n\n" + prompt}]}],
+            request_options={"timeout": 15},
         )
 
         return response.text.strip()

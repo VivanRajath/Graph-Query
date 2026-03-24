@@ -28,7 +28,10 @@ def _check_neo4j_available() -> bool:
         print("[Graph] No NEO4J_URI configured. Using local SQLite graph.")
         return False
     try:
-        driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
+        driver = GraphDatabase.driver(
+            NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD),
+            connection_timeout=5, max_connection_lifetime=60,
+        )
         # Use a short timeout so startup isn't blocked
         driver.verify_connectivity()
         driver.close()
@@ -58,7 +61,8 @@ class Neo4jClient:
     def _get_driver(self):
         if self._driver is None and _HAS_NEO4J_PACKAGE:
             self._driver = GraphDatabase.driver(
-                NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD)
+                NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD),
+                connection_timeout=5, max_connection_lifetime=60,
             )
         return self._driver
 
