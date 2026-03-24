@@ -2,8 +2,7 @@
 
 import os
 import json
-import signal
-import threading
+import concurrent.futures
 import google.generativeai as genai
 from dotenv import load_dotenv
 
@@ -56,13 +55,20 @@ def format_results(question: str, rows: list[dict], row_count: int, template_use
             f"Please format this data as a helpful response to the user's question."
         )
 
-        # Use a timeout to prevent hanging on serverless
-        response = model.generate_content(
-            [{"role": "user", "parts": [{"text": SYSTEM_PROMPT + "\n\n" + prompt}]}],
-            request_options={"timeout": 15},
-        )
+        # Enforce strict 10-second timeout using ThreadPoolExecutor
+        def call_gemini():
+            return model.generate_content(
+                [{"role": "user", "parts": [{"text": SYSTEM_PROMPT + "\n\n" + prompt}]}]
+            )
 
-        return response.text.strip()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(call_gemini)
+            try:
+                response = future.result(timeout=10.0)
+                return response.text.strip()
+            except concurrent.futures.TimeoutError:
+                print("[WARN] Gemini API timed out after 10s. Falling back.")
+                return _fallback_format(question, rows, row_count, template_used)
 
     except Exception as e:
         print(f"[WARN] Gemini API error: {e}")
