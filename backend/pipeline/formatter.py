@@ -10,6 +10,10 @@ load_dotenv()
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
+# ── Vercel diagnostic: confirm env var is present in function logs ─────
+print("[Env] GEMINI_API_KEY:", "SET" if GEMINI_API_KEY else "MISSING")
+# ──────────────────────────────────────────────────────────────────────
+
 SYSTEM_PROMPT = (
     "You are a business data assistant. Your job is to provide a brief, conversational, and human-friendly "
     "summary of the data. Do NOT output large tables or raw lists of rows—the raw data will be shown to the "
@@ -67,11 +71,11 @@ def format_results(question: str, rows: list[dict], row_count: int, template_use
                 response = future.result(timeout=10.0)
                 return response.text.strip()
             except concurrent.futures.TimeoutError:
-                print("[WARN] Gemini API timed out after 10s. Falling back.")
+                print("[WARN] Gemini API timed out after 10s — possible outbound HTTPS block on Vercel or slow model response.")
                 return _fallback_format(question, rows, row_count, template_used)
 
     except Exception as e:
-        print(f"[WARN] Gemini API error: {e}")
+        print(f"[WARN] Gemini API error: {type(e).__name__}: {e}")
         return _fallback_format(question, rows, row_count, template_used)
 
 

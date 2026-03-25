@@ -11,6 +11,12 @@ NEO4J_URI = os.getenv("NEO4J_URI", "")
 NEO4J_USER = os.getenv("NEO4J_USER", "")
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "")
 
+# ── Vercel diagnostic: confirm env vars are present in function logs ───
+print("[Env] NEO4J_URI    :", "SET" if NEO4J_URI     else "MISSING")
+print("[Env] NEO4J_USER   :", "SET" if NEO4J_USER    else "MISSING")
+print("[Env] NEO4J_PASSWORD:", "SET" if NEO4J_PASSWORD else "MISSING")
+# ──────────────────────────────────────────────────────────────────────
+
 # Check if neo4j package is even installed
 _HAS_NEO4J_PACKAGE = False
 try:
@@ -38,7 +44,7 @@ def _check_neo4j_available() -> bool:
         print(f"[Graph] Neo4j connected at {NEO4J_URI}")
         return True
     except Exception as e:
-        print(f"[Graph] Neo4j unavailable ({type(e).__name__}). Using local SQLite graph.")
+        print(f"[Graph] Neo4j unavailable: {type(e).__name__}: {e}")
         return False
 
 
