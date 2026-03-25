@@ -376,6 +376,86 @@ body.dark-mode .badge-offline {
 .prop-key { color: var(--text-secondary); white-space: nowrap; }
 .prop-value { color: var(--text-primary); word-break: break-all; }
 
+/* ─── Edge Relationship Tooltip ────────────────────────────── */
+.edge-tooltip {
+    position: absolute;
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: 0 10px 30px var(--shadow-heavy);
+    padding: 14px 18px;
+    z-index: 50;
+    min-width: 220px;
+    max-width: 320px;
+    pointer-events: none;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+    animation: tooltip-appear 0.18s ease;
+}
+@keyframes tooltip-appear {
+    from { opacity: 0; transform: translateY(-6px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.edge-tooltip.visible { display: flex; }
+
+.edge-tooltip-title {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--text-muted);
+}
+.edge-tooltip-relation {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--accent-primary);
+    background: rgba(59,130,246,0.08);
+    border-radius: 8px;
+    padding: 8px 12px;
+}
+body.dark-mode .edge-tooltip-relation {
+    background: rgba(96,165,250,0.12);
+}
+.edge-tooltip-relation svg {
+    flex-shrink: 0;
+    color: var(--accent-primary);
+    opacity: 0.75;
+}
+.edge-tooltip-nodes {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.edge-tooltip-node-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+}
+.edge-tooltip-node-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    width: 36px;
+    flex-shrink: 0;
+}
+.edge-tooltip-node-value {
+    color: var(--text-primary);
+    font-weight: 500;
+    word-break: break-all;
+}
+.edge-tooltip-divider {
+    height: 1px;
+    background: var(--border-color);
+}
+
 /* ─── Chat Panel ────────────────────────────────────────────── */
 .chat-panel {
     display: flex; flex-direction: column;

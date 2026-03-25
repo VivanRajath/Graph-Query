@@ -7,42 +7,61 @@ This repository contains a full-stack Conversational Graph Query System built as
 
 ## 🎯 High-Level Overview
 
-- **Dataset to Graph Integration**: The dataset is fully parsed and ingested into a graph database (Neo4j), with a robust offline fallback to a local SQLite/NetworkX representation.
-- **Interactive Visualization**: The interconnected graph is visualized using **Cytoscape.js** offering features such as zooming, expanding nodes, hovering for detailed node metadata, and interactive floating controls.
-- **Conversational Interface**: A specialized chat module translates natural language user queries directly into structured data operations (such as SQL or Cypher), executing them dynamically.
-- **Data-Backed Answers**: The system responds _only_ with verifiable data from the underlying datastores. Off-topic prompts or general capability requests are firmly blocked.
+- **Dataset to Graph Integration**: The dataset is parsed and ingested into a graph database (**Neo4j**), with a robust offline fallback to a local **SQLite/NetworkX** engine.
+- **Interactive Visualization**: The interconnected graph is visualized using **Cytoscape.js**, offering features such as edge relationship tracking, zooming, spatial clustering, and interactive controls.
+- **Conversational Interface**: A specialized chat module translates natural language user queries directly into structured data operations. 
+- **Data-Backed Answers**: The system responds _only_ with verifiable data from the underlying SQLite datastore. Off-topic prompts or general capability requests are firmly blocked.
 
 ---
 
-## 🚀 Features Implemented (Based on Requirements)
+## 🏗️ End-to-End Architecture
 
-### 1. Graph Construction
-- **Nodes & Relationships**: Models core business entities—including `SalesOrder`, `PurchaseOrder`, `Delivery`, `BillingDocument`, `Payment`, `Plant`, `Customer`, `Address`, and `Product`. 
-- **Robust Ingestion Pipeline**: Scripts construct the nodes and map the hierarchical and flow-based relationships (e.g., `SalesOrder` → `Delivery` → `BillingDocument`).
+The system utilizes a decoupled **Client-Server Architecture** optimized for Serverless infrastructure (Vercel). 
 
-### 2. Graph Visualization (UI)
-- **Interactive Cytoscape Interface**: A powerful implementation with pan/zoom mechanics, node layout restructuring, and detail tooltips on hover/click.
-- **Aesthetic Dark & Light Themes**: The entire application (both graph and chat interface) fully supports theme switching with automatic dark mode persistence.
-- **Floating Tooling**: Included UI floating widgets for "Toggle Node IDs", "Hide Granular Overlays", and Legend maps.
+### 1. The Chat Pipeline (Deterministic Data Retrieval)
+When a user asks a question, the backend processes it through a strict 4-step pipeline:
+1. **Classifier**: Uses regex/keywords to ensure the question belongs to the SAP O2C domain, instantly blocking prompt injections.
+2. **Intent Parser**: Extracts the core mathematical/business intent and entities (`ORDER_DETAIL`, `TOP_CUSTOMERS`) without executing LLM completions, saving latency.
+3. **Query Router**: Maps the validated intent to safe, parameterized SQL templates against a **Read-Only SQLite (`data.db`)** instance. *The chat system never queries Neo4j directly, relying entirely on structured SQL to guarantee 100% accurate, hallucination-free answers.*
+4. **Formatter (LLM)**: Passes the raw SQLite JSON rows directly to an LLM (e.g., **Gemini 2.0 Flash**) to format into conversational language and synthesize business IDs into clickable nodes. Includes a programmatic fallback if rate-limits are reached.
 
-### 3. Conversational Query Interface & Guardrails
-- **Natural Language Parsing**: Translates user questions into structured operations dynamically using state-of-the-art LLMs.
-- **Guardrails System**: System actively rejects non-domain queries (e.g., "Write me a poem", "What is the weather?"). The conversational loop strictly respects boundaries.
-- **Advanced Query Support**: Easily handles inquiries such as tracing flow bottlenecks, identifying top customers by revenue, or finding incomplete document trails.
+### 2. The Graph Visualization Pipeline
+The right pane of the UI displays an independent, interactive node network:
+1. **Neo4j First**: The backend initially attempts connecting to the external **Neo4j AuraDB**.
+2. **Graceful Degradation (Local Fallback)**: If Neo4j times out or lacks credentials, the system silently redirects to `local_graph.py`. Here, it spins up an in-memory **NetworkX** mock graph based on SQLite tables, perfectly imitating the Neo4j payload format to feed the frontend.
+3. **Frontend Cytoscape**: The UI receives standard `{"nodes": [], "edges": []}` JSON format and renders it.
 
-### 4. Optional Extensions Included (Bonus)
-- **Model Agnosticism**: Multi-model compatibility configured to utilize any major provider (Gemini, OpenAI, Claude, Groq).
-- **Natural language to SQL/Graph Pipeline**: Full structured translation capabilities for extracting granular answers safely.
-- **Batch Embeddings & Caching**: Substantially optimized vector generation logic scaling up execution performance.
-- **Local Fallback Methodology**: Zero-configuration DB mode mapping SQLite relations to NetworkX without requiring Neo4j credentials, enabling immediate local execution.
+### 3. Serverless Deployment Strategy
+Configured specifically for stateless execution on Vercel:
+- **Stateless Execution**: Python backend runs as distinct `api/index.py` functions isolated per request. 
+- **Read-Only Data**: `data.db` is read via URI config (`?mode=ro`) to prevent write-lock crashes on Vercel's ephemeral file system.
+- **Timeouts**: API connections (Neo4j, Gemini) have enforced threading timeouts to prevent breaching serverless hard limits.
+
+---
+
+## 🚀 Key Features Built
+
+### 1. Graph Construction & UI Visualization
+- **Complex Domain Modeling**: Maps hierarchical and flow-based relationships: `SalesOrder` → `Delivery` → `BillingDocument`.
+- **Interactive Web Interface**: Complete with pan/zoom mechanics, relationship tooltips on edge click, dark/light themes, and functional overlay toolsets to filter graph noise.
+- **Auto-Zoom Routing**: Clicking unique business IDs generated by the Chat Assistant automatically pans and zooms the graph camera to the specific node in the network.
+
+### 2. Conversational Guardrails & Intelligence
+- **Strict Domain Boundary**: Rejects non-business queries instantly ("Write a poem").
+- **Agile Intent Handling**: Parses inquiries such as tracing flow bottlenecks, finding broken orders missing delivery statuses, or aggregating gross revenues.
+- **Multi-Model Support**: Native support implementations for Gemini, Groq (Llama 3.3), OpenAI, and Anthropic seamlessly built into `formatter.py`.
+
+### 3. Robust Error Handling 
+- Zero-configuration DB fallback (Neo4j to SQLite/NetworkX).
+- Formatter gracefully handles LLM rate limit HTTP `429` codes by serving the exact SQL payload wrapped in a programmatic Python text format.
 
 ---
 
 ## 🛠 Tech Stack
 
-- **Backend**: Python 3.10+, FastAPI, Uvicorn, LangGraph/LangChain, Neo4j, SQLite, NetworkX
+- **Backend**: Python 3.10+, FastAPI, Neo4j, SQLite, NetworkX
 - **Frontend**: Vanilla JavaScript (ES6+), CSS3 with CSS Variables, HTML5, Cytoscape.js
-- **Deployment**: Configured for Serverless function deployment via Vercel (`vercel.json` included).
+- **Deployment**: Configured for Serverless deployment via Vercel (`vercel.json`).
 
 ---
 
@@ -60,15 +79,22 @@ source venv/bin/activate
 pip install -r backend/requirements.txt
 ```
 
-### 2. Environment Variables
-Create a `.env` file in the root based on the project requirements containing necessary API keys (e.g., `GEMINI_API_KEY`, `NEO4J_URI`, etc.).
+### 2. Required Setup
+Create a `.env` file in the root directory:
+```env
+GEMINI_API_KEY=your_gemini_api_key
+
+# (Optional: Graph Database)
+NEO4J_URI=neo4j+s://your-instance.databases.neo4j.io
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=your_password
+```
+*Note: If Neo4j variables are omitted or invalid, the Local DB fallback mechanism will engage seamlessly.*
 
 ### 3. Start the Server
 Navigate to the root directory and start the FastAPI server via Uvicorn:
 ```bash
-uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+cd backend
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 The application will automatically serve the UI at `http://localhost:8000/static/index.html`.
-
----
-

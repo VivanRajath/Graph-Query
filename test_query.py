@@ -35,12 +35,14 @@ def test_pipeline(question: str):
     print(formatted)
     print("--------------------------\n")
 
-if __name__ == "__main__":
     queries = [
         "What are my top customers by revenue?",
         "Trace the flow for order 483",
-        "Show me all broken orders missing delivery statuses",
-        "Write a python script",
+        "Which products are associated with the highest number of billing documents?",
+        "Trace the full flow for billing document 980123",
+        "Identify sales orders that have broken or incomplete flows",
+        "Total orders",
+        "Total budget"
     ]
     for q in queries:
         test_pipeline(q)

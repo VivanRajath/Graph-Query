@@ -159,14 +159,24 @@ function initGraph() {
     // Node click → show details & expand
     cy.on("tap", "node", async function (evt) {
         const node = evt.target;
+        hideEdgeTooltip();
         showNodeDetails(node.data());
         await expandNode(node.data().id);
+    });
+
+    // Edge click → show relationship tooltip
+    cy.on("tap", "edge", function (evt) {
+        const edge = evt.target;
+        const renderedPos = evt.renderedPosition;
+        hideNodeDetails();
+        showEdgeTooltip(edge, renderedPos);
     });
 
     // Background click → hide details
     cy.on("tap", function (evt) {
         if (evt.target === cy) {
             hideNodeDetails();
+            hideEdgeTooltip();
             clearSearch();
         }
     });
@@ -292,6 +302,48 @@ function showNodeDetails(data) {
 
 function hideNodeDetails() {
     document.getElementById("nodeDetails").classList.remove("visible");
+}
+
+// ─── Edge Tooltip ─────────────────────────────────────────────
+function showEdgeTooltip(edge, renderedPos) {
+    const tooltip = document.getElementById("edgeTooltip");
+    const relEl   = document.getElementById("edgeRelationType");
+    const srcEl   = document.getElementById("edgeSourceLabel");
+    const tgtEl   = document.getElementById("edgeTargetLabel");
+
+    const relationLabel = edge.data("label") || edge.data("id") || "connects";
+    const srcNode = edge.source();
+    const tgtNode = edge.target();
+    const srcLabel = srcNode.data("label") || srcNode.id();
+    const tgtLabel = tgtNode.data("label") || tgtNode.id();
+
+    relEl.textContent = relationLabel;
+    srcEl.textContent = srcLabel;
+    tgtEl.textContent = tgtLabel;
+
+    // Position near click, clamped inside the graph panel
+    const panel = document.getElementById("cy").parentElement;
+    const panelRect = panel.getBoundingClientRect();
+    const tooltipW = 260;
+    const tooltipH = 160;
+    const margin = 12;
+
+    let left = renderedPos.x + margin;
+    let top  = renderedPos.y + margin;
+
+    if (left + tooltipW > panelRect.width - margin)  left = renderedPos.x - tooltipW - margin;
+    if (top  + tooltipH > panelRect.height - margin) top  = renderedPos.y - tooltipH - margin;
+    left = Math.max(margin, left);
+    top  = Math.max(margin, top);
+
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top  = `${top}px`;
+    tooltip.classList.add("visible");
+}
+
+function hideEdgeTooltip() {
+    const tooltip = document.getElementById("edgeTooltip");
+    if (tooltip) tooltip.classList.remove("visible");
 }
 
 // ─── Graph Legend ────────────────────────────────────────────
@@ -513,8 +565,8 @@ function setupChat() {
                 if(el) el.style.display = controlsMinimized ? 'none' : '';
             });
             btnMinimize.innerHTML = controlsMinimized ? 
-                `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg> Maximize` :
-                `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg> Minimize`;
+                `<svg width="14" height="14" id="minimizeSvg"><use href="#icon-maximize"></use></svg> Maximize` :
+                `<svg width="14" height="14" id="minimizeSvg"><use href="#icon-minimize"></use></svg> Minimize`;
         });
     }
 
@@ -525,11 +577,11 @@ function setupChat() {
             if(cy) {
                 if(window.labelsForcedHidden) {
                     cy.nodes().style("text-opacity", 0);
-                    btnOverlay.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg> Show Granular Overlay`;
+                    btnOverlay.innerHTML = `<svg width="14" height="14" id="overlaySvg"><use href="#icon-overlay-show"></use></svg> Show Granular Overlay`;
                 } else {
                     const zoom = cy.zoom();
                     cy.nodes().style("text-opacity", zoom > 1.2 ? 1 : 0);
-                    btnOverlay.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg> Hide Granular Overlay`;
+                    btnOverlay.innerHTML = `<svg width="14" height="14" id="overlaySvg"><use href="#icon-overlay-hide"></use></svg> Hide Granular Overlay`;
                 }
             }
         });
@@ -547,8 +599,8 @@ function setupChat() {
                     "text-opacity": showNodeIds ? 1 : (zoom > 1.2 && !window.labelsForcedHidden ? 1 : 0)
                 });
                 btnNodeIds.innerHTML = showNodeIds ? 
-                    `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg> Show Type Labels` :
-                    `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg> Toggle Node IDs`;
+                    `<svg width="14" height="14" id="nodeIdsSvg"><use href="#icon-node-label"></use></svg> Show Type Labels` :
+                    `<svg width="14" height="14" id="nodeIdsSvg"><use href="#icon-node-id"></use></svg> Toggle Node IDs`;
             }
         });
     }
@@ -608,7 +660,7 @@ function renderTabs(data) {
         for (const [key, val] of Object.entries(row)) {
             let displayVal = escapeHtml(String(val));
             const kLower = key.toLowerCase();
-            if (["order", "delivery", "billing", "document", "customer", "party", "product"].some(x => kLower.includes(x)) && String(val).match(/^\\d+$/)) {
+            if (["order", "delivery", "billing", "document", "customer", "party", "product"].some(x => kLower.includes(x)) && String(val).match(/^\d+$/)) {
                 displayVal = `<a href="#" class="graph-link" data-node-id="${displayVal}">${displayVal}</a>`;
             }
             dataHtml += `<div class="data-row"><span class="data-key">${formatKey(key)}:</span> <span class="data-val">${displayVal}</span></div>`;
@@ -938,8 +990,8 @@ function toggleDarkMode() {
     const btnDarkMode = document.getElementById('btnDarkMode');
     if (btnDarkMode) {
         btnDarkMode.innerHTML = isDark
-            ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`
-            : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`;
+            ? `<svg width="18" height="18"><use href="#icon-sun"></use></svg>`
+            : `<svg width="18" height="18"><use href="#icon-moon"></use></svg>`;
     }
     
     // Update cytoscape node/edge colors
@@ -962,7 +1014,7 @@ function restoreDarkMode() {
         // Update icon to sun
         const btnDarkMode = document.getElementById('btnDarkMode');
         if (btnDarkMode) {
-            btnDarkMode.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
+            btnDarkMode.innerHTML = `<svg width="18" height="18"><use href="#icon-sun"></use></svg>`;
         }
     }
 }

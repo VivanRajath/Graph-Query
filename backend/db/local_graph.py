@@ -4,9 +4,7 @@ Builds a basic topological graph from the SQLite data.db so the frontend can sti
 """
 
 import sqlite3
-from pathlib import Path
-
-DB_PATH = Path(__file__).resolve().parent.parent / "data.db"
+from backend.db.sqlite_client import get_connection
 
 class LocalGraphClient:
     def __init__(self):
@@ -16,11 +14,7 @@ class LocalGraphClient:
         self._loaded = False
 
     def _load_data(self):
-        if self._loaded or not DB_PATH.exists():
-            return
-        
-        conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
-        conn.row_factory = sqlite3.Row
+        conn = get_connection()
         
         def add_node(nid, label, ntype, props):
             if nid not in self.nodes:

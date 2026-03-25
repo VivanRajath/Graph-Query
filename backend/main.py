@@ -29,12 +29,16 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# CORS for local frontend
+# CORS for local and specific frontend domains
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "http://localhost:3000"
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -50,6 +54,8 @@ AUTO_OPEN = (not IS_VERCEL) and os.getenv("AUTO_OPEN_BROWSER", "true").lower() i
 
 class QueryRequest(BaseModel):
     question: str
+    limit: int = 50
+    offset: int = 0
 
 
 class QueryResponse(BaseModel):
@@ -120,7 +126,7 @@ def query(request: QueryRequest):
     intent = parse_intent(question)
 
     # Step 3: Route to SQL template and execute
-    result = route_query(intent)
+    result = route_query(intent, limit=request.limit, offset=request.offset)
 
     if result.get("error") and not result["rows"]:
         raise HTTPException(status_code=400, detail=result["error"])
