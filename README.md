@@ -1,71 +1,78 @@
 # Graph Query System
 **Assessment for Forward Deployed Engineer (FDE) Role at Dodge AI**
 
-This repository contains a full-stack Conversational Graph Query System built as an assessment for the FDE role at Dodge AI. The system ingests a sample dataset (covering the Order-to-Cash process), models it into an interconnected graph, and provides both a rich visualization UI and an intelligent natural language chat interface.
+**Live Demo:** [https://graph-query-pi.vercel.app/](https://graph-query-pi.vercel.app/)
+
+This repository contains a full-stack Conversational Graph Query System built as an assessment for the FDE role at Dodge AI. The system ingests a sample dataset covering the Order-to-Cash process, models it into an interconnected graph, and provides both a rich visualization UI and an intelligent natural language chat interface.
 
 ---
 
-## 🎯 High-Level Overview
+## High-Level Overview
 
-- **Dataset to Graph Integration**: The dataset is parsed and ingested into a graph database (**Neo4j**), with a robust offline fallback to a local **SQLite/NetworkX** engine.
-- **Interactive Visualization**: The interconnected graph is visualized using **Cytoscape.js**, offering features such as edge relationship tracking, zooming, spatial clustering, and interactive controls.
+- **Dataset to Graph Integration**: The dataset is parsed and ingested into a graph database (Neo4j), with a robust offline fallback to a local SQLite/NetworkX engine.
+- **Interactive Visualization**: The interconnected graph is visualized using Cytoscape.js, offering features such as edge relationship tracking, zooming, spatial clustering, and interactive controls.
 - **Conversational Interface**: A specialized chat module translates natural language user queries directly into structured data operations. 
-- **Data-Backed Answers**: The system responds _only_ with verifiable data from the underlying SQLite datastore. Off-topic prompts or general capability requests are firmly blocked.
+- **Data-Backed Answers**: The system responds only with verifiable data from the underlying SQLite datastore. Off-topic prompts or general capability requests are firmly blocked.
 
 ---
 
-## 🏗️ End-to-End Architecture
+## Uniqueness of the System
 
-The system utilizes a decoupled **Client-Server Architecture** optimized for Serverless infrastructure (Vercel). 
+This architecture was designed to solve the primary flaw in modern RAG (Retrieval-Augmented Generation) applications: Data Hallucination. 
 
-### 1. The Chat Pipeline (Deterministic Data Retrieval)
+**Anti-Hallucination Pipeline (Deterministic Data Retrieval)**
 When a user asks a question, the backend processes it through a strict 4-step pipeline:
-1. **Classifier**: Uses regex/keywords to ensure the question belongs to the SAP O2C domain, instantly blocking prompt injections.
-2. **Intent Parser**: Extracts the core mathematical/business intent and entities (`ORDER_DETAIL`, `TOP_CUSTOMERS`) without executing LLM completions, saving latency.
-3. **Query Router**: Maps the validated intent to safe, parameterized SQL templates against a **Read-Only SQLite (`data.db`)** instance. *The chat system never queries Neo4j directly, relying entirely on structured SQL to guarantee 100% accurate, hallucination-free answers.*
-4. **Formatter (LLM)**: Passes the raw SQLite JSON rows directly to an LLM (e.g., **Gemini 2.0 Flash**) to format into conversational language and synthesize business IDs into clickable nodes. Includes a programmatic fallback if rate-limits are reached.
-
-### 2. The Graph Visualization Pipeline
-The right pane of the UI displays an independent, interactive node network:
-1. **Neo4j First**: The backend initially attempts connecting to the external **Neo4j AuraDB**.
-2. **Graceful Degradation (Local Fallback)**: If Neo4j times out or lacks credentials, the system silently redirects to `local_graph.py`. Here, it spins up an in-memory **NetworkX** mock graph based on SQLite tables, perfectly imitating the Neo4j payload format to feed the frontend.
-3. **Frontend Cytoscape**: The UI receives standard `{"nodes": [], "edges": []}` JSON format and renders it.
-
-### 3. Serverless Deployment Strategy
-Configured specifically for stateless execution on Vercel:
-- **Stateless Execution**: Python backend runs as distinct `api/index.py` functions isolated per request. 
-- **Read-Only Data**: `data.db` is read via URI config (`?mode=ro`) to prevent write-lock crashes on Vercel's ephemeral file system.
-- **Timeouts**: API connections (Neo4j, Gemini) have enforced threading timeouts to prevent breaching serverless hard limits.
+1. **Classifier**: Uses regex and keywords to ensure the question belongs to the SAP O2C domain, instantly blocking prompt injections.
+2. **Intent Parser**: Extracts the core mathematical and business intent (`ORDER_DETAIL`, `TOP_CUSTOMERS`) without executing LLM completions, saving latency and cost.
+3. **Query Router**: Maps the validated intent to safe, parameterized SQL templates against a Read-Only SQLite instance. The chat system never queries Neo4j directly, relying entirely on structured SQL to guarantee 100% accurate, hallucination-free answers.
+4. **Formatter**: Passes the raw SQLite JSON rows directly to a Large Language Model to format into conversational language and synthesize business IDs into clickable nodes.
 
 ---
 
-## 🚀 Key Features Built
+## Resilience and Fallback Mechanisms
 
-### 1. Graph Construction & UI Visualization
-- **Complex Domain Modeling**: Maps hierarchical and flow-based relationships: `SalesOrder` → `Delivery` → `BillingDocument`.
-- **Interactive Web Interface**: Complete with pan/zoom mechanics, relationship tooltips on edge click, dark/light themes, and functional overlay toolsets to filter graph noise.
-- **Auto-Zoom Routing**: Clicking unique business IDs generated by the Chat Assistant automatically pans and zooms the graph camera to the specific node in the network.
+The system employs extreme graceful degradation. Deployment to Serverless infrastructure (Vercel) requires strict attention to ephemeral file systems and timeouts.
 
-### 2. Conversational Guardrails & Intelligence
-- **Strict Domain Boundary**: Rejects non-business queries instantly ("Write a poem").
-- **Agile Intent Handling**: Parses inquiries such as tracing flow bottlenecks, finding broken orders missing delivery statuses, or aggregating gross revenues.
-- **Multi-Model Support**: Native support implementations for Gemini, Groq (Llama 3.3), OpenAI, and Anthropic seamlessly built into `formatter.py`.
+1. **Database Fallback (The Graph Pipeline)**
+   The UI displays an independent, interactive node network. The backend initially attempts connecting to the external Neo4j AuraDB instance. If Neo4j times out or lacks credentials, the system silently redirects to a local fallback script. Here, it spins up an in-memory NetworkX graph generated in real-time directly from the genuine SQLite tables, perfectly imitating the Neo4j payload format to feed the frontend seamlessly with the exact same data.
 
-### 3. Robust Error Handling 
-- Zero-configuration DB fallback (Neo4j to SQLite/NetworkX).
-- Formatter gracefully handles LLM rate limit HTTP `429` codes by serving the exact SQL payload wrapped in a programmatic Python text format.
+2. **LLM Formatting Fallback**
+   If the chosen Large Language Model provider fails or hits a rate limit (HTTP 429), a strict timeout thread catches the failure and instantly returns a hardcoded, structural Python string fallback (e.g., "I found 5 orders for this customer.") to ensure the user is never left without an answer.
 
 ---
 
-## 🛠 Tech Stack
+## Model Agnosticism
+
+The system is completely Model Agnostic. The `formatter.py` pipeline has built-in, native REST API support for all major foundational models without relying on heavy external SDKs. 
+
+It seamlessly cascades and integrates with:
+- **Google Gemini** (Gemini 2.0 Flash)
+- **Groq** (Llama 3.3 70B)
+- **OpenAI** (GPT-4o Mini)
+- **Anthropic** (Claude 3 Haiku)
+
+If one provider rate-limits the application, the backend is capable of failing over to an alternative provider or engaging the aforementioned Python structural fallback.
+
+---
+
+## Key Features Built
+
+1. **Complex Domain Modeling**: Maps hierarchical and flow-based relationships: SalesOrder -> Delivery -> BillingDocument.
+2. **Interactive Web Interface**: Complete with pan/zoom mechanics, relationship tooltips on edge click, dark/light themes, and functional overlay toolsets to filter graph noise.
+3. **Auto-Zoom Routing**: Clicking unique business IDs generated by the Chat Assistant automatically pans and zooms the graph camera to the specific node in the network.
+4. **Strict Serverless Strategy**: Read-Only data access mitigates write-lock crashes on Vercel's ephemeral instances.
+
+---
+
+## Tech Stack
 
 - **Backend**: Python 3.10+, FastAPI, Neo4j, SQLite, NetworkX
 - **Frontend**: Vanilla JavaScript (ES6+), CSS3 with CSS Variables, HTML5, Cytoscape.js
-- **Deployment**: Configured for Serverless deployment via Vercel (`vercel.json`).
+- **Deployment**: Configured for Serverless deployment via Vercel (vercel.json).
 
 ---
 
-## 📦 Local Setup & Execution
+## Local Setup & Execution
 
 ### 1. Requirements Installation
 Using a virtual environment, install the backend dependencies:
@@ -89,7 +96,7 @@ NEO4J_URI=neo4j+s://your-instance.databases.neo4j.io
 NEO4J_USER=neo4j
 NEO4J_PASSWORD=your_password
 ```
-*Note: If Neo4j variables are omitted or invalid, the Local DB fallback mechanism will engage seamlessly.*
+*Note: If Neo4j variables are omitted or invalid, the Local DB NetworkX fallback mechanism will engage seamlessly.*
 
 ### 3. Start the Server
 Navigate to the root directory and start the FastAPI server via Uvicorn:
