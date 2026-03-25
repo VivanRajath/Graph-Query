@@ -1,9 +1,9 @@
-"""Format SQL results using a single Gemini API call."""
+"""Format SQL results using a single Gemini API call via REST (no gRPC)."""
 
 import os
 import json
-import concurrent.futures
-import google.generativeai as genai
+import urllib.request
+import urllib.error
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -13,6 +13,10 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 # ── Vercel diagnostic: confirm env var is present in function logs ─────
 print("[Env] GEMINI_API_KEY:", "SET" if GEMINI_API_KEY else "MISSING")
 # ──────────────────────────────────────────────────────────────────────
+
+GEMINI_REST_URL = (
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+)
 
 SYSTEM_PROMPT = (
     "You are a business data assistant. Your job is to provide a brief, conversational, and human-friendly "
@@ -25,6 +29,54 @@ SYSTEM_PROMPT = (
     "as a special markdown link using the scheme `id:`, like this: `[1000214](id:1000214)`. "
     "The frontend uses this to make the ID clickable so the user can zoom to the node in the graph."
 )
+
+
+def _call_gemini_rest(prompt: str, timeout: float = 10.0) -> str | None:
+    """
+    Call Gemini via REST API with the given prompt.
+    Returns the response text, or None on any failure.
+    """
+    if not GEMINI_API_KEY or GEMINI_API_KEY == "your_key_here":
+        return None
+
+    url = f"{GEMINI_REST_URL}?key={GEMINI_API_KEY}"
+
+    payload = {
+        "contents": [
+            {
+                "parts": [{"text": SYSTEM_PROMPT + "\n\n" + prompt}]
+            }
+        ],
+        "generationConfig": {
+            "maxOutputTokens": 512,
+            "temperature": 0.3,
+        },
+    }
+
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+            # Extract text from the first candidate
+            candidates = body.get("candidates", [])
+            if candidates:
+                parts = candidates[0].get("content", {}).get("parts", [])
+                if parts:
+                    return parts[0].get("text", "").strip()
+        return None
+    except urllib.error.HTTPError as e:
+        print(f"[WARN] Gemini REST API HTTP error: {e.code} {e.reason}")
+        return None
+    except Exception as e:
+        print(f"[WARN] Gemini REST API error: {type(e).__name__}: {e}")
+        return None
 
 
 def format_results(question: str, rows: list[dict], row_count: int, template_used: str = "") -> str:
@@ -40,43 +92,23 @@ def format_results(question: str, rows: list[dict], row_count: int, template_use
     Returns:
         Formatted natural language string
     """
-    if not GEMINI_API_KEY or GEMINI_API_KEY == "your_key_here":
-        # Fallback: format without Gemini
-        return _fallback_format(question, rows, row_count, template_used)
+    # Truncate rows for the prompt to avoid token limits
+    display_rows = rows[:20]
+    rows_text = json.dumps(display_rows, indent=2, default=str)
 
-    try:
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel("gemini-2.0-flash")
+    prompt = (
+        f"User question: {question}\n\n"
+        f"Query returned {row_count} result(s).\n"
+        f"Results:\n{rows_text}\n\n"
+        f"Please format this data as a helpful response to the user's question."
+    )
 
-        # Truncate rows for the prompt to avoid token limits
-        display_rows = rows[:20]  # Reduced from 50 to 20 for faster responses
-        rows_text = json.dumps(display_rows, indent=2, default=str)
+    result = _call_gemini_rest(prompt, timeout=10.0)
+    if result:
+        return result
 
-        prompt = (
-            f"User question: {question}\n\n"
-            f"Query returned {row_count} result(s).\n"
-            f"Results:\n{rows_text}\n\n"
-            f"Please format this data as a helpful response to the user's question."
-        )
-
-        # Enforce strict 10-second timeout using ThreadPoolExecutor
-        def call_gemini():
-            return model.generate_content(
-                [{"role": "user", "parts": [{"text": SYSTEM_PROMPT + "\n\n" + prompt}]}]
-            )
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(call_gemini)
-            try:
-                response = future.result(timeout=10.0)
-                return response.text.strip()
-            except concurrent.futures.TimeoutError:
-                print("[WARN] Gemini API timed out after 10s — possible outbound HTTPS block on Vercel or slow model response.")
-                return _fallback_format(question, rows, row_count, template_used)
-
-    except Exception as e:
-        print(f"[WARN] Gemini API error: {type(e).__name__}: {e}")
-        return _fallback_format(question, rows, row_count, template_used)
+    # Fallback: format without Gemini
+    return _fallback_format(question, rows, row_count, template_used)
 
 
 def _fallback_format(question: str, rows: list[dict], row_count: int, template_used: str = "") -> str:
